@@ -9,7 +9,10 @@
 
 #ifndef MSAVIRIFF_H
 # define MSAVIRIFF_H
-
+# define DWORD  unsigned int
+#pragma warning(disable: 4097 4511 4512 4514 4705)
+#pragma warning(disable: 4996)
+#pragma warning(disable: 4200)
 # define FCC(ch4) ((((DWORD)(ch4) & 0xFF) << 24) |     \
                   (((DWORD)(ch4) & 0xFF00) << 8) |    \
                   (((DWORD)(ch4) & 0xFF0000) >> 8) |  \

@@ -23,15 +23,41 @@
 *	Redistributions in binary form must reproduce the above copyright notice.
 */
 
-#ifndef TYPES_H
-# define TYPES_H
+#ifndef LIBGMAVI_H
+# define LIBGMAVI_H
+# include <stdint.h>
+# include <stdbool.h>
+# ifdef __cplusplus
+extern "C" {
+# endif
 
-# define	FOURCC		unsigned int
-# define	DWORD		unsigned int
-# define	BYTE		unsigned char
-# define	DWORDLONG	unsigned long
-# define	WORD		unsigned short
-# define	LONG		long
-# define	UINT		unsigned int
+	/*
+	*	Open a (new) file ready to receive frame data
+	*
+	*	@param	filePath		- Full path or name suffixed with the ".avi" extension
+	*	@param	width			- Width of the video
+	*	@param	height			- Height of the video
+	*	@param	framesPerSec	- Frames per second
+	*	@return gmavi instance (void *)
+	*/
+	void* gmav_open(const char* filePath, uint32_t width, uint32_t height, uint32_t framesPerSec);
 
+	/*
+	*	Add a frame to the current file stream
+	*
+	*	@param	gmavi			- gmavi instance
+	*	@param	buffer			- 24bits per pixel bitmap array (bottom first)
+	*/
+	bool		gmav_add(void* gmavi, uint8_t* buffer);
+
+	/*
+	*	Finish and close file
+	*
+	*	@param	gmavi			- gmavi instance
+	*/
+	bool		gmav_finish(void* gmavi);
+
+# ifdef __cplusplus
+}
+# endif
 #endif

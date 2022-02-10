@@ -24,6 +24,7 @@
 */
 
 #include <stdio.h>
+#include <io.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
@@ -44,18 +45,15 @@ static bool	gmav_error(gmavi_t *avi, uint32_t errorCode, const char *additionalS
 		free(avi);
 	}
 	if (additionalString)
-		perror(additionalString);
+	{
+		printf("%s\n", additionalString);
+		strerror(errorCode);
+	}
 	else if (errorCode == EBADF)
-		perror("Invalid file descriptor");
+		strerror(errorCode);
 	else if (errorCode == EACCES)
-		perror("File is used by another process");
+		strerror(errorCode);
 	return (false);
-}
-
-static bool	fileExists(const char *filePath)
-{
-	struct stat	buffer;
-	return (stat(filePath, &buffer) == 0);
 }
 
 void		*gmav_open(
@@ -77,10 +75,10 @@ void		*gmav_open(
 		return (NULL);
 	}
 
-	out->filePath = strdup(filePath);
+	out->filePath = _strdup(filePath);
 	out->bitmapSize = width * height * 3;
 	out->streamTickSize = out->bitmapSize + 8;
-	out->maxFrames = (uint32_t)RIFF_MAX_SIZE / out->streamTickSize;
+	out->maxFrames = 1999991696 / out->streamTickSize;
 
 	contents.main = (RIFFLIST){
 		FCC('RIFF'),
@@ -97,11 +95,17 @@ void		*gmav_open(
 		FCC('hdrl')
 	};
 
+	uint32_t	avihMaxBytesPerSec;
+	if (0xFFFFFFFF / out->bitmapSize > framesPerSec)
+		avihMaxBytesPerSec = out->bitmapSize * framesPerSec;
+	else
+		avihMaxBytesPerSec = 0xFFFFFFFF;
+
 	contents.aviHeader = (AVIMAINHEADER){
 		FCC('avih'),
 		STATIC_AVI_HEADER_SIZE,
 		1000000 / framesPerSec,
-		(out->bitmapSize + 30) * framesPerSec,
+		avihMaxBytesPerSec,
 		0,
 		AVIF_HASINDEX,
 		TO_BE_DETERMINED,
@@ -138,6 +142,7 @@ void		*gmav_open(
 		0,
 		(RECT){0, 0, width, height}
 	};
+	
 	fileAddr.totalFrames = (uint64_t)&contents.streamHeader.length - fileAddr._fileBaseStart;
 
 	contents.strf = (RIFFCHUNK){
@@ -163,6 +168,7 @@ void		*gmav_open(
 		FCC('JUNK'),
 		STATIC_SUPER_INDEX_SIZE,
 	};
+	
 	fileAddr.superIndex = (uint64_t)&contents.superIndex - fileAddr._fileBaseStart;
 	fileAddr.entriesInUse = (uint64_t)&contents.superIndex.entriesInUse - fileAddr._fileBaseStart;
 	fileAddr.superIndexEntries = (uint64_t)&contents.superIndex.index[0] - fileAddr._fileBaseStart;
@@ -376,8 +382,6 @@ bool	gmav_add(
 		return (gmav_error(avi, 0, "No gmavi_t struct specified (null)"));
 	if (buffer == NULL)
 		return (gmav_error(avi, 0, "No buffer specified (null)"));
-	if (!fileExists(avi->filePath))
-		return (gmav_error(avi, 0, "No open file detected, did you remove it?"));
 
 	if (avi->frameCount && avi->frameCount % avi->maxFrames == 0)
 		gmav_add_avix_chunk(avi);
@@ -404,20 +408,16 @@ bool		gmav_finish(
 {
 	if (gmavi == NULL)
 		return (gmav_error(NULL, 0, "No gmavi_t struct specified (null)"));
-
 	gmavi_t	*avi = (gmavi_t *)gmavi;
-
-	if (!fileExists(avi->filePath))
-		return (gmav_error(avi, 0, "No open file detected, did you remove it?"));
 
 	if (avi->riffChunks == 0)
 		return (gmav_finish_main(avi));
 
 	uint32_t	framesLeft = avi->frameCount % avi->maxFrames;
-	if (framesLeft == 0)
+	if (framesLeft == 0)	//	edge case
 		framesLeft = avi->maxFrames;
-	gmav_create_index(avi, framesLeft);
 
+	gmav_create_index(avi, framesLeft);
 	avi->fileHandler = fopen(avi->filePath, "rb+");
 	if (avi->fileHandler == NULL)
 		return (gmav_error(avi, errno, NULL));
@@ -433,11 +433,10 @@ bool		gmav_finish(
 		{0, 0, 0},
 		TO_BE_DETERMINED
 	};
-
 	_fseeki64(avi->fileHandler, avi->fileAddr.superIndex, SEEK_SET);
 	fwrite(&superIndex, sizeof(AVISUPERINDEX), 1, avi->fileHandler);
-
 	avi->fileSize += avi->streamTickSize * framesLeft;
+	
 	for (uint32_t i = 0; i < avi->riffChunks; i++) {
 
 		_fseeki64(avi->fileHandler, 0, SEEK_END);

@@ -98,7 +98,7 @@ typedef struct	_riffList
 *	@param		fcc						-	FOURCC code 'avih'	@FOURCC_AVI_HEADER
 *	@param		cb						-	Size of this structure (minus @fcc and @cb)
 *	@param		microSecPerFrame		-	Microseconds per frame (1000000 / frameRateSec)
-*	@param		maxuint8_tsPerSec			-	Approximate maximum data rate (W*H*FMT*FRAMES?)
+*	@param		maxBytesPerSec			-	Approximate maximum data rate (W*H*FMT*FRAMES?)
 *	@param		paddingGranularity		-	Data alignment. Multiples of this value
 *	@param		flags					-	Metadata flags
 *	@param		totalFrames				-	Amount of frames in the file		(*)
@@ -143,7 +143,6 @@ typedef struct	_rect
 # define	AVISF_DISABLED				0x00000001
 # define 	AVISF_VIDEO_PALCHANGES   	0x00010000
 
-//riffpad <---
 /*
 *	AVISTREAMHEADER
 *

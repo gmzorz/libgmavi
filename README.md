@@ -194,6 +194,7 @@ contents.superIndex = (AVISUPERINDEX)
 };
 ```
 > `STATIC_SUPER_INDEX_SIZE` is defined as 4120, which includes the super index size: `24` (minus 8 for type and cb), and the total entry size: `4096` (16 * 256).
+>
 > [Jump to AVISUPERINDEX](?)
 
 One could define this as a `RIFFCHUNK`, but it is easier to keep the original structure to keep track of the variables we wish to seek in the future.

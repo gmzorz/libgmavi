@@ -1,5 +1,5 @@
 # libgmavi
-A compact library made for simple video writing using uncompressed buffers. libgmavi is partially a study, and an addition to the [CODMVM](https://codmvm.com/) toolset, which handles multi-pass videogame recording whilst being hooked to the supported game. 
+A compact library made for simple video writing using uncompressed buffers. libgmavi is partially a study, and an addition to the [CODMVM](https://codmvm.com/) toolset, which handles multi-pass videogame recording whilst being hooked to the supported game. libgmavi covers the OpenDML AVI 2.0 Extensions as well, but does not feature compression methods.
 
 # Use case and example
 _(not much knowledge required)_

@@ -9,15 +9,19 @@ This library is made for the sole purpose of writing RAW (uncompressed) AVI 2.0 
 # Theory
 _(In case you've heard of file headers, padding, the BMP format, and hopefully had some run-ins with fseek/fwrite!)_
 Nowadays the focus is on video encoding for web and live or realtime broadcasts. Packing and compressing videos is one step further into my research, so i figured starting from the roots would be the best way to approach it.
+
 Because the focus is more on encoding, it was a bit hard to actually acquire the knowledge i had hoped to find on the internet, which was a bit of a shame. I will try and run through the process as clearly and simple as possible in the hopes that it might help those who are willing to learn more about the format
 
 ##### Understanding the format
 A good place to start is getting to know the format itself. Wikipedia is always good, sure! But learning requires doing, and in my case i would fall asleep looking at the white front page of wikipedia. [VirtualDub](https://www.virtualdub.org/) uses the AVI 2.0 format and can produce videos from sequences in a matter of seconds. How? we don't really care too much at this point, but the output is more important to us.
+
 Because we are dealing with uncompressed footage, we can easily view the structure of the AVI files using software like [HxD](https://mh-nexus.de/en/hxd/). Which is intimidating, but most definitely required when debugging file memory addresses. I later found out about useful software such as [RIFFPad](https://www.menasoft.com/blog/?p=34), which allows you to see the structure of the RIFF AVI file, and [010 Editor](https://www.sweetscape.com/010editor/), which does the same using it's plug-ins but has a memory viewer/editor and is capable of manipulation.
+
 Lastly, and most importantly, the [Microsoft reference](https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) and the [OpenDML reference](http://www.jmcgowan.com/odmlff2.pdf) are essential to this topic, the second article talks about eliminating the 2GB size limitation, which is simply caused by a 32bit variable in the header defining the size. Back in the day, nobody ever thought we needed AVI files of over 2GB.
 
 ##### A structure of structures
 Basically what we are looking at. The format is written as a tree, which starts at the root: the RIFF AVI Chunk. This chunk contains all the data we need, up until the size limitation! Let's tackle this before we get to writing bigger files.
+
 The Microsoft RIFF reference shows the following tree: 
 ```c++
 RIFF ('AVI '
@@ -59,6 +63,7 @@ typedef struct	_riffList
 }	RIFFLIST;
 ```
 Chunks or Lists are frequently used in the file structure, primarely to define the main RIFF Chunks which hold up to 2GB of data. We start off with a list with FCC type `'RIFF'` (four chars, in binary form), the size of the chunk, which is unknown at this point, and the list type, which we define as the FCC (**four** character) type `'AVI '`.
+
 The size of this RIFF Chunk will be determined later, so we need to save this memory address: `0x4`. It is also important to know the size does **not** include the first 8 bytes, the FCC Type and Size variables.
 > The `aviriff.h` header file contains a compiler #define (`FCC()`) which can translate four character identifiers into a 32-bit unsigned integer
 
@@ -140,6 +145,7 @@ Okay, no more bullshit. I am going to spoil all the secrets of this header. I am
 * **`frame`** - Size of the display frame `(RECT){0, 0, width, height}`
 
 Yet again we have another variable to keep track of, which is the **length** of the video segment in the initial RIFF Chunk. This does not mean ALL frames, but only the ones that fit within the size limit.
+
 The suggested buffer size is meant for the entire chunk, so in this case we want to set it to the UINT_MAX limit. The `RECT` structure consists of four shorts (2 bytes): top, bottom, left, and right.
 > [AVISTREAMHEADER reference](https://docs.microsoft.com/en-us/previous-versions/ms779638(v=vs.85))
 
@@ -173,8 +179,11 @@ This header is not available within the aviriff.h header, but it is widely avail
 > [BITMAPINFOHEADER reference](https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfoheader)
 
 **Reserving space and inserting JUNK**
+
 We are close to writing actual image data, but we need to keep something in mind. In order to utilize the 2GB workaround, OpenDML offers a Super Index in which we can store references to indices (or indexes) that are not within the main RIFF chunk. We don't actually have access to this data yet until we have written enough data.
+
 A super index will contain a set of entries, and we specifically need to know the size of this entire struct so we can reserve some space using the `'JUNK'` FCC code, whilst making sure we can index enough frames. The index stores an array with each element being 32 bytes long, and you might think we need one for every frame. This is false, we are dealing with an *index of indexes*, meaning every entry is an index itself.
+
 Every index of frames can hold up to 2GB of references, using a base offset in the index itself, which is 8 bytes and can be used across a file of more than 2^64-1 bytes (**18446744000** Gigabytes), and simple 4 byte offsets within each frame reference entry that communicate with the base offset.
 Defining the size is left up to you, i went with 256 entries which will cover 512 Gigabytes of video data.
 ```c++

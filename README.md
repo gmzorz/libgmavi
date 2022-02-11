@@ -4,7 +4,28 @@ A compact library made for simple video writing using uncompressed buffers. libg
 # Use case and example
 _(not much knowledge required)_
 This library is made for the sole purpose of writing RAW (uncompressed) AVI 2.0 video files. Specifically those of a higher file-size. The format can be particularly useful for raw image data interpretation for post-processing, video editing and compositing. The provided functions are minimal, and do not require much knowledge in video writing in order to function nicely. For example, one could easily make a simple still video using the following layout:
-![alt text](https://github.com/gmzorz/libgmavi/blob/main/exmp.png)
+```c++
+int   main(void)
+{
+      // Instance and buffer set up
+      void*             gmav  =     gmav_open("testing.avi", 100, 100, 30);
+      unsigned char*    buffer =    malloc(100 * 100 * 3);
+
+      // Fill the buffer
+      for (int i = 0; i < 100 * 100 * 3; i++) {
+            *(unsigned char *)(buffer + i)      = 0xFF;     // Blue channel
+            *(unsigned char *)(buffer + i + 1)  = 0xB8;     // Green channel
+            *(unsigned char *)(buffer + i + 2)  = 0x2A;     // Red channel
+      }
+
+      // Add a couple of frames
+      for (int i = 0; i < 10; i++) {
+            gmav_add(gmav_buffer);
+      }
+
+      gmav_finish(gmav);
+}
+```
 
 # Theory
 _(In case you've heard of file headers, padding, the BMP format, and hopefully had some run-ins with fseek/fwrite!)_
@@ -12,14 +33,14 @@ Nowadays the focus is on video encoding for web and live or realtime broadcasts.
 
 Because the focus is more on encoding, it was a bit hard to actually acquire the knowledge i had hoped to find on the internet, which was a bit of a shame. I will try and run through the process as clearly and simple as possible in the hopes that it might help those who are willing to learn more about the format
 
-##### Understanding the format
+#### Understanding the format
 A good place to start is getting to know the format itself. Wikipedia is always good, sure! But learning requires doing, and in my case i would fall asleep looking at the white front page of wikipedia. [VirtualDub](https://www.virtualdub.org/) uses the AVI 2.0 format and can produce videos from sequences in a matter of seconds. How? we don't really care too much at this point, but the output is more important to us.
 
 Because we are dealing with uncompressed footage, we can easily view the structure of the AVI files using software like [HxD](https://mh-nexus.de/en/hxd/). Which is intimidating, but most definitely required when debugging file memory addresses. I later found out about useful software such as [RIFFPad](https://www.menasoft.com/blog/?p=34), which allows you to see the structure of the RIFF AVI file, and [010 Editor](https://www.sweetscape.com/010editor/), which does the same using it's plug-ins but has a memory viewer/editor and is capable of manipulation.
 
 Lastly, and most importantly, the [Microsoft reference](https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) and the [OpenDML reference](http://www.jmcgowan.com/odmlff2.pdf) are essential to this topic, the second article talks about eliminating the 2GB size limitation, which is simply caused by a 32bit variable in the header defining the size. Back in the day, nobody ever thought we needed AVI files of over 2GB.
 
-##### A structure of structures
+#### A structure of structures
 Basically what we are looking at. The format is written as a tree, which starts at the root: the RIFF AVI Chunk. This chunk contains all the data we need, up until the size limitation! Let's tackle this before we get to writing bigger files.
 
 The Microsoft RIFF reference shows the following tree: 
@@ -51,7 +72,7 @@ RIFF ('AVI '
 ```
 Which is great! but does not provide much detailed information.
 Let's start from the top.
-> _(Structures can be obtained from the `aviriff.h` header file, and are also included in this source)_
+> _(Structures can be obtained from the `aviriff.h` header file, and are also included in this repo)_
 
 **Main RIFF AVI chunk (lists)**
 ```c++
@@ -105,7 +126,8 @@ Followed by the header list, we can start filling in the main header.
 
 All done! most of these can be filled in based on just the Width, Height and frames per second. Even better: the `cb` variable can already be filled in [`STATIC_AVI_HEADER_SIZE`], because all the information that follows within this sub-chunk will be the same for all future video files. What we do need to save is the amount of **total frames**. Keep in mind, the offsets to these variables will get gradually harder to keep track of. Don't be shy to play around in your favorite Hex editor!
 > Read more about the [AVIMAINHEADER](https://docs.microsoft.com/en-us/previous-versions/ms779632(v=vs.85)) structure
-Macros mentioned in this page can always be found in the [avistruct.h](https://github.com/gmzorz/libgmavi/blob/32ab42bc94f3b971caca8d4ab038da1d2694d9d2/src/aviStruct.h) file in this repo
+
+>Macros mentioned in this page can always be found in the [avistruct.h](https://github.com/gmzorz/libgmavi/blob/32ab42bc94f3b971caca8d4ab038da1d2694d9d2/src/aviStruct.h) file in this repo
 
 Before we move on to the next struct we need to define another `RIFFLIST` for what is about to follow. This list contains the `'LIST'` FCC code, the size (already known): `STATIC_STREAM_LIST_SIZE`, and the type indication of the stream header: `'strl'`
 
@@ -189,8 +211,8 @@ Defining the size is left up to you, i went with 256 entries which will cover 51
 ```c++
 contents.superIndex = (AVISUPERINDEX)
 {
-		FCC('JUNK'),
-		STATIC_SUPER_INDEX_SIZE,
+      FCC('JUNK'),
+      STATIC_SUPER_INDEX_SIZE,
 };
 ```
 > `STATIC_SUPER_INDEX_SIZE` is defined as 4120, which includes the super index size: `24` (minus 8 for type and cb), and the total entry size: `4096` (16 * 256).
@@ -203,11 +225,109 @@ fileAddr.superIndex = (uint64_t)&contents.superIndex - fileAddr._fileBaseStart;
 fileAddr.entriesInUse = (uint64_t)&contents.superIndex.entriesInUse - fileAddr._fileBaseStart;
 fileAddr.superIndexEntries = (uint64_t)&contents.superIndex.index[0] - fileAddr._fileBaseStart;
 ```
-In these examples, i use a struct holding all my addresses to keep track of, as well as `contents` which contains all of the previously explained structures. As it might be noticable, it becomes easier to compute the file offsets.
+In these examples, i use a struct holding all my addresses to keep track of, as well as `contents` which contains all of the previously explained structures. As it might be noticable, it becomes easier to compute the file offsets by simply subtracting them from the base address. Do keep in mind that most modern compilers optimize collections of variable types in a way that it messes with the byte count we need, preprocessor statements can fix this issue.
 > [Structure **padding**](https://docs.microsoft.com/en-us/cpp/preprocessor/pack?view=msvc-170) is almost always applied during compile-time. The use of `#pragma pack(push,1)` is essential to our use case!
 
+OpenDML also features an *extended header*, with the (complete) frame count specified. It is very minimal and can be expressed like so:
+```c++
+contents.odml = (RIFFLIST){
+      FCC('LIST'),
+      STATIC_EXTENDED_LIST_SIZE,
+      FCC('odml')
+};
 
+contents.extendedHeader = (AVIEXTHEADER){
+      FCC('dmlh'),
+      STATIC_EXTENDED_HEADER_SIZE,
+      TO_BE_DETERMINED,
+      0x0
+};
+fileAddr.grandFrames = (uint64_t)&contents.extendedHeader.grandFrames - fileAddr._fileBaseStart;
+```
+As shown above, we have another `RIFFLIST` with type `'odml'` and it's default sizes. The total frame count (`grandFrames`) will be filled in after the final frame has been written, so we save this address.
 
+**JUNK & Alignment**
+
+As mentioned above, JUNK can be placed anywhere in the file alongside a size indicator. JUNK is used in data alignment and to add comments to the file. I am a bit unsure as to whether this is necessary, but for safety i just did it the way VirtualDub does it.
+```c++
+contents.junk = (RIFFCHUNK){
+      FCC('JUNK'),
+      STATIC_JUNKFILL_SIZE
+};
+```
+the `STATIC_JUNKFILL_SIZE` macro aligns the junk up until `0x2000`
+
+**Video frames & Bitmap data**
+
+We've made it past the header! finally, video frames are added, and at this point we can almost write the data we have collected so far.
+
+```c++
+contents.movi = (RIFFLIST){
+      FCC('LIST'),
+      TO_BE_DETERMINED,
+      FCC('movi')
+};
+
+fileAddr.cbMovi = (uint64_t)&contents.movi.cb - fileAddr._fileBaseStart;
+fileAddr.moviStart = fileAddr.cbMovi + 8;
+```
+Our final addition to our structure collection will be the list that holds all the frames. We do not only keep track of the size of this structure, but also the start of the array. This will become clear when we get to the indexing part.
+
+Right now, the size of our structure collection will be that of the file size itself as well. If we subtract 8 from this size, we get the current value of the main RIFF `cb` variable. Instead of writing now, it is better to save the size in memory and only write the variable and other key elements when everything has been written.
+```c++
+out->fileHandler = fopen(filePath, "wb+");
+fwrite(&out->contents, sizeof(gmavi_static_t), 1, out->fileHandler);
+```
+
+This concludes `gmav_open()`, we have successfully created a file that holds the AVI header. in `gmav_add()` we can start writing video frames.
+
+The process is simple, the list is already defined so all that is left is two small additions to the image buffer itself. One being the fcc chunk ID and the other being the size. Chunk ID's can be taken from the aviriff.h file, which in this case will be `'00db'` (meaning: uncompressed frame). The size is simply the width multiplied by the height, times the color channels: `1920*1080*3`. We write the expressed `RIFFCHUNK`, followed by the image buffer.
+> It is useful to store the size of the image buffer, we need to write this value a couple more times!
+
+**Finishing up**
+
+Assuming *n* amount of image buffers have been added, and the size does not exceed 2GB, finalizing the AVI file comes with a bit of ease. We still have write the final index (not super index, since we determined it to be JUNK) and update our saved addresses.
+```c++
+typedef struct	_aviOldIndex_entry
+{
+	uint32_t			chunkId;
+	uint32_t			flags;
+	uint32_t			offset;
+	uint32_t			size;
+}	AVIOLDINDEX_ENTRY;
+
+typedef struct	_aviOldIndex
+{
+	FOURCC				fcc;
+	uint32_t			cb;
+}	AVIOLDINDEX;
+```
+The index is called the **old** index for a reason, it is part of the AVI 1.0 standard. VirtualDub also includes this list when using OpenDML for higher file-sizes, and it is not clear whether the DML index fully overrides the old index in any way, it is therefore always a good option to write it regardless.
+In the old index, the fcc identifier for the old index becomes `'idx1'`, whereas the size becomes the size of an entry multiplied with the framecount.
+
+Each entry has the corresponding chunkId `'00db'`, the `AVIF_HASINDEX` flag, the offset to the bitmap, and the size of the bitmap.
+The offset starts from the first `'movi'` appearance, hence, it needs to be `4` for the first entry. The following entries have an offset to the next frames. One can simply add the size and the additional 8 bytes of the `RIFFCHUNK` (00db, size).
+
+Filling up the array, Where `streamTickSize` is the size of the bitmap + 8:
+```c++
+for (uint32_t i = 0; i < avi->frameCount; i++) {
+      avi->mainIndexEntries[i] = (AVIOLDINDEX_ENTRY){
+            FCC('00db'),
+            AVIF_HASINDEX,
+            4 + avi->streamTickSize * i,
+            avi->bitmapSize
+      };
+}
+```
+
+Finally, all bytes have been written, and the remaining task is to seek to the bytes we need to update:
+* `fileAddr.cbMain`           ->    size of everything minus 8
+* `fileAddr.firstFrames`      ->    frame count
+* `fileAddr.totalFrames`      ->    frame count
+* `fileAddr.grandFrames`      ->    frame count
+* `fileAddr.cbMovi`           ->    size of the `movi` segment
+
+So many frame counts! well, they are currently all the same, the only exception would be `grandFrames` when we actually use the DML standard.
 
 
 

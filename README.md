@@ -41,7 +41,11 @@ Because we are dealing with uncompressed footage, we can easily view the structu
 Lastly, and most importantly, the [Microsoft reference](https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) and the [OpenDML reference](http://www.jmcgowan.com/odmlff2.pdf) are essential to this topic, the second article talks about eliminating the 2GB size limitation, which is simply caused by a 32bit variable in the header defining the size. Back in the day, nobody ever thought we needed AVI files of over 2GB.
 
 #### **A structure of structures**
+
 Basically what we are looking at. The format is written as a tree, which starts at the root: the RIFF AVI Chunk. This chunk contains all the data we need, up until the size limitation! Let's tackle this before we get to writing bigger files.
+
+To make things easier to understand, this graph displays the way structures are aligned within the format:
+!(avifmt)[https://gmzorz.com/avifmt.png]
 
 The Microsoft RIFF reference shows the following tree: 
 ```c++

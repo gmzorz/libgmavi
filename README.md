@@ -33,14 +33,14 @@ Nowadays the focus is on video encoding for web and live or realtime broadcasts.
 
 Because the focus is more on encoding, it was a bit hard to actually acquire the knowledge i had hoped to find on the internet, which was a bit of a shame. I will try and run through the process as clearly and simple as possible in the hopes that it might help those who are willing to learn more about the format
 
-#### Understanding the format
+#### **Understanding the format**
 A good place to start is getting to know the format itself. Wikipedia is always good, sure! But learning requires doing, and in my case i would fall asleep looking at the white front page of wikipedia. [VirtualDub](https://www.virtualdub.org/) uses the AVI 2.0 format and can produce videos from sequences in a matter of seconds. How? we don't really care too much at this point, but the output is more important to us.
 
 Because we are dealing with uncompressed footage, we can easily view the structure of the AVI files using software like [HxD](https://mh-nexus.de/en/hxd/). Which is intimidating, but most definitely required when debugging file memory addresses. I later found out about useful software such as [RIFFPad](https://www.menasoft.com/blog/?p=34), which allows you to see the structure of the RIFF AVI file, and [010 Editor](https://www.sweetscape.com/010editor/), which does the same using it's plug-ins but has a memory viewer/editor and is capable of manipulation.
 
 Lastly, and most importantly, the [Microsoft reference](https://docs.microsoft.com/en-us/windows/win32/directshow/avi-riff-file-reference) and the [OpenDML reference](http://www.jmcgowan.com/odmlff2.pdf) are essential to this topic, the second article talks about eliminating the 2GB size limitation, which is simply caused by a 32bit variable in the header defining the size. Back in the day, nobody ever thought we needed AVI files of over 2GB.
 
-#### A structure of structures
+#### **A structure of structures**
 Basically what we are looking at. The format is written as a tree, which starts at the root: the RIFF AVI Chunk. This chunk contains all the data we need, up until the size limitation! Let's tackle this before we get to writing bigger files.
 
 The Microsoft RIFF reference shows the following tree: 
@@ -74,7 +74,7 @@ Which is great! but does not provide much detailed information.
 Let's start from the top.
 > _(Structures can be obtained from the `aviriff.h` header file, and are also included in this repo)_
 
-**Main RIFF AVI chunk (lists)**
+#### **Main RIFF AVI chunk (lists)**
 ```c++
 typedef struct	_riffList
 {
@@ -90,7 +90,7 @@ The size of this RIFF Chunk will be determined later, so we need to save this me
 
 Following this list, we need to define the AVI header. This is done by writing another `RIFFLIST` directly after the RIFF Chunk, with the type set to `'LIST'` and the list type to `'hdrl'`. The MS Reference states that these two lists are **mandatory** and should always be written.
 
-**AVI main header**
+#### **AVI main header**
 ```c++
 typedef struct 	_aviMainHeader
 {
@@ -131,7 +131,7 @@ All done! most of these can be filled in based on just the Width, Height and fra
 
 Before we move on to the next struct we need to define another `RIFFLIST` for what is about to follow. This list contains the `'LIST'` FCC code, the size (already known): `STATIC_STREAM_LIST_SIZE`, and the type indication of the stream header: `'strl'`
 
-**stream header**
+#### **stream header**
 ```c++
 typedef struct	_aviStreamHeader
 {
@@ -180,7 +180,7 @@ typedef struct	_riffChunk
 }	RIFFCHUNK;
 ```
 The fourcc code becomes `'strf'`, and the size will be a static value: `STATIC_STREAM_FORMAT_SIZE`
-**Bitmap header**
+#### **Bitmap header**
 ```c++
 typedef struct	_bitMapInfoHeader
 {
@@ -200,7 +200,7 @@ typedef struct	_bitMapInfoHeader
 This header is not available within the aviriff.h header, but it is widely available in other resources. cb becomes `STATIC_BITMAP_HEADER_SIZE`, it will have `1` plane, and `24` as bit count. Everything else but the width/height is not required to complete this part.
 > [BITMAPINFOHEADER reference](https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapinfoheader)
 
-**Reserving space and inserting JUNK**
+#### **Reserving space and inserting JUNK**
 
 We are close to writing actual image data, but we need to keep something in mind. In order to utilize the 2GB workaround, OpenDML offers a Super Index in which we can store references to indices (or indexes) that are not within the main RIFF chunk. We don't actually have access to this data yet until we have written enough data.
 
@@ -246,7 +246,7 @@ fileAddr.grandFrames = (uint64_t)&contents.extendedHeader.grandFrames - fileAddr
 ```
 As shown above, we have another `RIFFLIST` with type `'odml'` and it's default sizes. The total frame count (`grandFrames`) will be filled in after the final frame has been written, so we save this address.
 
-**JUNK & Alignment**
+#### **JUNK & Alignment**
 
 As mentioned above, JUNK can be placed anywhere in the file alongside a size indicator. JUNK is used in data alignment and to add comments to the file. I am a bit unsure as to whether this is necessary, but for safety i just did it the way VirtualDub does it.
 ```c++
@@ -257,7 +257,7 @@ contents.junk = (RIFFCHUNK){
 ```
 the `STATIC_JUNKFILL_SIZE` macro aligns the junk up until `0x2000`
 
-**Video frames & Bitmap data**
+#### **Video frames & Bitmap data**
 
 We've made it past the header! finally, video frames are added, and at this point we can almost write the data we have collected so far.
 
@@ -284,7 +284,7 @@ This concludes `gmav_open()`, we have successfully created a file that holds the
 The process is simple, the list is already defined so all that is left is two small additions to the image buffer itself. One being the fcc chunk ID and the other being the size. Chunk ID's can be taken from the aviriff.h file, which in this case will be `'00db'` (meaning: uncompressed frame). The size is simply the width multiplied by the height, times the color channels: `1920*1080*3`. We write the expressed `RIFFCHUNK`, followed by the image buffer.
 > It is useful to store the size of the image buffer, we need to write this value a couple more times!
 
-**Finishing up**
+#### **Finishing up**
 
 Assuming *n* amount of image buffers have been added, and the size does not exceed 2GB, finalizing the AVI file comes with a bit of ease. We still have write the final index (not super index, since we determined it to be JUNK) and update our saved addresses.
 ```c++
@@ -325,207 +325,80 @@ Finally, all bytes have been written, and the remaining task is to seek to the b
 * `fileAddr.firstFrames`      ->    frame count
 * `fileAddr.totalFrames`      ->    frame count
 * `fileAddr.grandFrames`      ->    frame count
-* `fileAddr.cbMovi`           ->    size of the `movi` segment
+* `fileAddr.cbMovi`           ->    size of the `movi` list
 
 So many frame counts! well, they are currently all the same, the only exception would be `grandFrames` when we actually use the DML standard.
 
+#### **AVI 2.0**
+_(If you've come this far, why not continue?)_
 
+Nothing to celebrate about... yet! We are almost there, the next steps are simple and the DML extensions are actually not that hard to implement.
 
+When we reach a frame count that surpasses 2GB we have to still finish writing our base. The above applies, and our empty JUNK section will have to be filled in based on what we do next. Remember AVI 2.0 is an *extension* that, if you were to erase it, still allows the original AVI 1.0 file to be played.
 
-# Links
+First up is indexing the initial frames, up until the limit, we allocate and save a `AVISTDINDEX` struct with the fcc type `'ix00'` and create the indices for it:
+```c++
+avi->ix00[avi->riffChunks].avixIndex = (AVISTDINDEX){
+      FCC('ix00'),                  /* identifier           */
+      24 + size * 8,                /* size                 */ 
+      2,                            /* longs per entry (2)  */
+      0,                            /* no subtype           */
+      AVI_INDEX_OF_CHUNKS,          /* index type           */
+      size,                         /* amount of frames     */
+      FCC('00db'),                  /* uncompressed         */
+      avi->fileAddr.moviStart,      /* start of bitmap array*/
+      0                             /* reserved             */
+};
 
-
-
-
-# Dillinger
-## _The Last Markdown Editor, Ever_
-
-[![N|Solid](https://cldup.com/dTxpPi9lDf.thumb.png)](https://nodesource.com/products/nsolid)
-
-[![Build Status](https://travis-ci.org/joemccann/dillinger.svg?branch=master)](https://travis-ci.org/joemccann/dillinger)
-
-Dillinger is a cloud-enabled, mobile-ready, offline-storage compatible,
-AngularJS-powered HTML5 Markdown editor.
-
-- Type some Markdown on the left
-- See HTML in the right
-- ✨Magic ✨
-
-## Features
-
-- Import a HTML file and watch it magically convert to Markdown
-- Drag and drop images (requires your Dropbox account be linked)
-- Import and save files from GitHub, Dropbox, Google Drive and One Drive
-- Drag and drop markdown and HTML files into Dillinger
-- Export documents as Markdown, HTML and PDF
-
-Markdown is a lightweight markup language based on the formatting conventions
-that people naturally use in email.
-As [John Gruber] writes on the [Markdown site][df1]
-
-> The overriding design goal for Markdown's
-> formatting syntax is to make it as readable
-> as possible. The idea is that a
-> Markdown-formatted document should be
-> publishable as-is, as plain text, without
-> looking like it's been marked up with tags
-> or formatting instructions.
-
-This text you see here is *actually- written in Markdown! To get a feel
-for Markdown's syntax, type some text into the left window and
-watch the results in the right.
-
-## Tech
-
-Dillinger uses a number of open source projects to work properly:
-
-- [AngularJS] - HTML enhanced for web apps!
-- [Ace Editor] - awesome web-based text editor
-- [markdown-it] - Markdown parser done right. Fast and easy to extend.
-- [Twitter Bootstrap] - great UI boilerplate for modern web apps
-- [node.js] - evented I/O for the backend
-- [Express] - fast node.js network app framework [@tjholowaychuk]
-- [Gulp] - the streaming build system
-- [Breakdance](https://breakdance.github.io/breakdance/) - HTML
-to Markdown converter
-- [jQuery] - duh
-
-And of course Dillinger itself is open source with a [public repository][dill]
- on GitHub.
-
-## Installation
-
-Dillinger requires [Node.js](https://nodejs.org/) v10+ to run.
-
-Install the dependencies and devDependencies and start the server.
-
-```sh
-cd dillinger
-npm i
-node app
+avi->ix00[avi->riffChunks].avixIndexEntries = (AVISTDINDEX_ENTRY *)calloc(1, sizeof(AVISTDINDEX_ENTRY) * size);
+for (uint32_t i = 0; i < size; i++) {
+      /* The offset is based on the start of the bitmap array (base offset) */
+      avi->ix00[avi->riffChunks].avixIndexEntries[i].dwOffset = avi->streamTickSize * i;
+      avi->ix00[avi->riffChunks].avixIndexEntries[i].dwSize = avi->bitmapSize;
+}
 ```
-
-For production environments...
-
-```sh
-npm install --production
-NODE_ENV=production node app
+Subsequently, the newer RIFF DML list needs to be initialized and written:
+```c++
+RIFFLIST	avix = {
+      FCC('RIFF'),
+      TO_BE_DETERMINED,
+      FCC('AVIX')
+};
+RIFFLIST	movi = {
+      FCC('LIST'),
+      TO_BE_DETERMINED,
+      FCC('movi')
+};
 ```
+> keep track of size!
 
-## Plugins
+Any frame that exceeds the limit should be written under this new AVIX chunk, which is essentially the DML 2.0 identifier, and happens exactly the way we wrote the older frames. Every 2GB, a new AVIX chunk should always be created, and a corresponding index must be made.
 
-Dillinger is currently extended with the following plugins.
-Instructions on how to use them in your own application are linked below.
+#### **The super index**
 
-| Plugin | README |
-| ------ | ------ |
-| Dropbox | [plugins/dropbox/README.md][PlDb] |
-| GitHub | [plugins/github/README.md][PlGh] |
-| Google Drive | [plugins/googledrive/README.md][PlGd] |
-| OneDrive | [plugins/onedrive/README.md][PlOd] |
-| Medium | [plugins/medium/README.md][PlMe] |
-| Google Analytics | [plugins/googleanalytics/README.md][PlGa] |
+The final index must be made based on the remaining frames, and finally we can actually start to write those to the end of the file.
 
-## Development
-
-Want to contribute? Great!
-
-Dillinger uses Gulp + Webpack for fast developing.
-Make a change in your file and instantaneously see your updates!
-
-Open your favorite Terminal and run these commands.
-
-First Tab:
-
-```sh
-node app
+Let's refer back to the super index, currently residing near the start of the file identified as JUNK: this will be the index that holds all the references (or pointers) to the `AVISTDINDEX` structs we made for each AVI(X) chunk. Time to fill it in:
+```c++
+AVISUPERINDEX	superIndex = {
+      FCC('indx'),                  /* super index id       */
+      STATIC_SUPER_INDEX_SIZE,      /* we already know this */
+      4,                            /* longs per entry (4)  */
+      0,                            /* no subtype           */
+      0,                            /* no type              */
+      avi->riffChunks + 1,          /* amount of chunks     */
+      FCC('00db'),                  /* uncompressed         */
+      {0, 0, 0},                    /* reserved             */
+      TO_BE_DETERMINED              /* entries              */
+};
+_fseeki64(avi->fileHandler, avi->fileAddr.superIndex, SEEK_SET);
+fwrite(&superIndex, sizeof(AVISUPERINDEX), 1, avi->fileHandler);
 ```
+> In libgmavi, the first RIFF chunk is not counted, hence the extra +1
 
-Second Tab:
+It is no longer classified as JUNK! it should be fairly straightforward to fill in the remaining entries that hold the 64bit `offset` to the start of each bitmap array, the `size` of the entire chunk, and the `duration` (frame count).
 
-```sh
-gulp watch
-```
+## **That was it?**
 
-(optional) Third:
+Pretty much, if you wish to ask questions, feel free to leave an issue or contact me directly.
 
-```sh
-karma test
-```
-
-#### Building for source
-
-For production release:
-
-```sh
-gulp build --prod
-```
-
-Generating pre-built zip archives for distribution:
-
-```sh
-gulp build dist --prod
-```
-
-## Docker
-
-Dillinger is very easy to install and deploy in a Docker container.
-
-By default, the Docker will expose port 8080, so change this within the
-Dockerfile if necessary. When ready, simply use the Dockerfile to
-build the image.
-
-```sh
-cd dillinger
-docker build -t <youruser>/dillinger:${package.json.version} .
-```
-
-This will create the dillinger image and pull in the necessary dependencies.
-Be sure to swap out `${package.json.version}` with the actual
-version of Dillinger.
-
-Once done, run the Docker image and map the port to whatever you wish on
-your host. In this example, we simply map port 8000 of the host to
-port 8080 of the Docker (or whatever port was exposed in the Dockerfile):
-
-```sh
-docker run -d -p 8000:8080 --restart=always --cap-add=SYS_ADMIN --name=dillinger <youruser>/dillinger:${package.json.version}
-```
-
-> Note: `--capt-add=SYS-ADMIN` is required for PDF rendering.
-
-Verify the deployment by navigating to your server address in
-your preferred browser.
-
-```sh
-127.0.0.1:8000
-```
-
-## License
-
-MIT
-
-**Free Software, Hell Yeah!**
-
-[//]: # (These are reference links used in the body of this note and get stripped out when the markdown processor does its job. There is no need to format nicely because it shouldn't be seen. Thanks SO - http://stackoverflow.com/questions/4823468/store-comments-in-markdown-syntax)
-
-   [dill]: <https://github.com/joemccann/dillinger>
-   [git-repo-url]: <https://github.com/joemccann/dillinger.git>
-   [john gruber]: <http://daringfireball.net>
-   [df1]: <http://daringfireball.net/projects/markdown/>
-   [markdown-it]: <https://github.com/markdown-it/markdown-it>
-   [Ace Editor]: <http://ace.ajax.org>
-   [node.js]: <http://nodejs.org>
-   [Twitter Bootstrap]: <http://twitter.github.com/bootstrap/>
-   [jQuery]: <http://jquery.com>
-   [@tjholowaychuk]: <http://twitter.com/tjholowaychuk>
-   [express]: <http://expressjs.com>
-   [AngularJS]: <http://angularjs.org>
-   [Gulp]: <http://gulpjs.com>
-
-   [PlDb]: <https://github.com/joemccann/dillinger/tree/master/plugins/dropbox/README.md>
-   [PlGh]: <https://github.com/joemccann/dillinger/tree/master/plugins/github/README.md>
-   [PlGd]: <https://github.com/joemccann/dillinger/tree/master/plugins/googledrive/README.md>
-   [PlOd]: <https://github.com/joemccann/dillinger/tree/master/plugins/onedrive/README.md>
-   [PlMe]: <https://github.com/joemccann/dillinger/tree/master/plugins/medium/README.md>
-   [PlGa]: <https://github.com/RahulHP/dillinger/blob/master/plugins/googleanalytics/README.md>

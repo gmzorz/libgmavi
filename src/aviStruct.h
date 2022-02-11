@@ -205,7 +205,7 @@ typedef struct	_bitMapInfoHeader
 /*
 *	AVISUPERINDEX_ENTRY
 *
-*	@param		offset			-	64 bit offset to field index chunk (@AVIFIELDINDEX)
+*	@param		offset			-	64 bit offset to field index chunk (@AVISTDINDEX)
 *	@param		size			-	size of chunk
 *	@param		duration		-	duration of chunk (in stream ticks/frames)
 */
@@ -229,7 +229,7 @@ typedef struct	_aviSuperIndex_entry
 *	@param				entriesInUse	-	?
 *	@param				chunkId			-	Chunk ID of chunks being indexed ('DIB '?)
 *	@param				reserved		-	Reserved 12 Bytes
-*	@param				index			-	Index entries pointing to field index chunk (@AVIFIELDINDEX)
+*	@param				index			-	Index entries pointing to field index chunk (@AVISTDINDEX)
 */
 typedef struct	_aviSuperIndex
 {
@@ -318,7 +318,7 @@ typedef struct _avistdindex_entry
 *	@param				chunkId			-	'00db'
 *	@param				baseOffset		-	offsets in field index entries are relative to this
 *	@param				reserved3		-	0
-*	@param				index[ ];		-	field index entries		@AVIFIELDINDEX_ENTRY
+*	@param				index[ ];		-	field index entries		@AVISTDINDEX_ENTRY
 */
 typedef struct _avistdindex
 {

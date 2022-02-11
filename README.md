@@ -45,7 +45,7 @@ Lastly, and most importantly, the [Microsoft reference](https://docs.microsoft.c
 Basically what we are looking at. The format is written as a tree, which starts at the root: the RIFF AVI Chunk. This chunk contains all the data we need, up until the size limitation! Let's tackle this before we get to writing bigger files.
 
 To make things easier to understand, this graph displays the way structures are aligned within the format:
-!(avifmt)[https://gmzorz.com/avifmt.png]
+![avifmt](https://gmzorz.com/avifmt.png)
 
 The Microsoft RIFF reference shows the following tree: 
 ```c++
